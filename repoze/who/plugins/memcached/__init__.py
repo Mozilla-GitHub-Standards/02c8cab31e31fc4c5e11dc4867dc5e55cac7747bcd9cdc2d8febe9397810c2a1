@@ -36,7 +36,7 @@
 # ***** END LICENSE BLOCK *****
 """
 
-repoze.who IIdentifier/IAuthenticator plugin that caches valid credentials.
+repoze.who plugin to cache the results of other plugins.
 
 """
 
@@ -48,6 +48,7 @@ import hashlib
 import pylibmc
 
 from zope.interface import implements
+from repoze.who.api import get_api
 from repoze.who.interfaces import IAuthenticator, IMetadataProvider
 
 
@@ -120,9 +121,6 @@ class MemcachedPlugin(object):
                   "mdprovider_name (otherwise this plugin won't "\
                   "actually do anything...)"
             raise ValueError(msg)
-        if value_items is not None:
-            if "repoze.who.userid" not in value_items:
-                value_items = list(value_items) + ["repoze.who.userid"]
         if secret is None:
             secret = os.urandom(16)
         if ttl is None:
@@ -163,9 +161,11 @@ class MemcachedPlugin(object):
         if userid is None:
             return None
         # If that was successful, cache it along with any added data.
-        identity.setdefault("repoze.who.userid", userid)
+        # Make sure to always cache repoze.who.userid.
         if value_items is None:
             value_items = [k for k in identity.iterkeys() if k not in old_keys]
+        identity.setdefault("repoze.who.userid", userid)
+        value_items = ["repoze.who.userid"] + list(value_items)
         self._set_cached(environ, identity, value_items, "authenticate")
         return userid
 
@@ -204,7 +204,7 @@ class MemcachedPlugin(object):
         # Grab it from the cache as a JSON string.
         try:
             value = self._client.get(key)
-        except pylibmc.SomeErrors:
+        except pylibmc.Error:
             return None
         # Parse it into a dict of data.
         try:
@@ -228,8 +228,8 @@ class MemcachedPlugin(object):
             except KeyError:
                 pass
         try:
-            self._client.set(key, json.dumps(value), time=self.ttl)
-        except pylibmc.WriteError:
+            self._client.set(key, json.dumps(data), time=self.ttl)
+        except pylibmc.Error:
             pass
         
     def _get_cache_key(self, environ, identity, method_name):
@@ -260,7 +260,7 @@ class MemcachedPlugin(object):
         hasher = hmac.new(self.secret, method_name, hashlib.sha1)
         hasher.update("\x00")
         for name in key_items:
-            hasher.update(identity.get(name, ""))
+            hasher.update(str(identity.get(name, "")))
             hasher.update("\x00")
         key = hasher.hexdigest()
         # Cache it for future reference.
