@@ -10,10 +10,10 @@ with open(os.path.join(here, 'README.rst')) as f:
 with open(os.path.join(here, 'CHANGES.txt')) as f:
     CHANGES = f.read()
 
-requires = ['repoze.who']
+requires = ['repoze.who', 'pylibmc']
 
 setup(name='repoze.who.plugins.memcached',
-      version='0.1.0',
+      version='0.1.1',
       description='repoze.who.plugins.memcached',
       long_description=README + '\n\n' + CHANGES,
       classifiers=[
